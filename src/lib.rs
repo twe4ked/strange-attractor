@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{WebGlProgram, WebGlRenderingContext, WebGlShader};
@@ -36,12 +38,29 @@ pub fn start() -> Result<(), JsValue> {
     let program = link_program(&context, &vert_shader, &frag_shader)?;
     context.use_program(Some(&program));
 
+    let f = Rc::new(RefCell::new(None));
+    let g = f.clone();
+    let mut i = 0.1;
+
+    *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+        draw(&context, i).unwrap();
+        i += 0.001;
+
+        request_animation_frame(f.borrow().as_ref().unwrap());
+    }) as Box<dyn FnMut()>));
+
+    request_animation_frame(g.borrow().as_ref().unwrap());
+
+    Ok(())
+}
+
+fn draw(context: &WebGlRenderingContext, i: f32) -> Result<(), JsValue> {
     let mut vertices: Vec<f32> = Vec::new();
 
-    let a = 1.0;
-    let b = 2.0;
-    let c = 3.0;
-    let d = 4.0;
+    let a = 1.0 + i;
+    let b = 2.0 + i;
+    let c = 3.0 + i;
+    let d = 4.0 + i;
 
     let mut x: f32 = 0.0;
     let mut y: f32 = 0.0;
@@ -78,6 +97,16 @@ pub fn start() -> Result<(), JsValue> {
         (vertices.len() / 2) as i32,
     );
     Ok(())
+}
+
+fn window() -> web_sys::Window {
+    web_sys::window().expect("no global `window` exists")
+}
+
+fn request_animation_frame(f: &Closure<dyn FnMut()>) {
+    window()
+        .request_animation_frame(f.as_ref().unchecked_ref())
+        .expect("should register `requestAnimationFrame` OK");
 }
 
 pub fn compile_shader(
